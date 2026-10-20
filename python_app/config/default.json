@@ -1,0 +1,27 @@
+{
+  "_说明": "ToyMemory 规则核心默认配置。所有分值均为加权前的基础值。",
+  "database_path": "output/toy_memory.sqlite3",
+  "behavior": {
+    "_说明": "行为回流参数。阈值达到 3 分后生成候选记忆；模型和行为不能自动确认。",
+    "positive_threshold": 3.0,
+    "initial_confidence": 65.0,
+    "confidence_step": 5.0,
+    "pending_confidence_cap": 84.0,
+    "pending_confidence_floor": 40.0,
+    "weekly_pending_limit": 3,
+    "batch_candidate_limit": 3,
+    "skip_negative_score": -0.25
+  },
+  "trigger_weights": {
+    "_说明": "孩子主动点播和接受推荐后播放权重为 1；系统闲置推送打五折。",
+    "active_request": 1.0,
+    "accepted_recommendation": 1.0,
+    "idle_push": 0.5
+  },
+  "recommendation": {
+    "_说明": "单次返回条数和近期信号窗口。语音场景默认最多播报 3 条。",
+    "default_limit": 3,
+    "recent_days": 30
+  }
+}
+

@@ -1,0 +1,48 @@
+{
+  "flow_version": "generic-flow-v2",
+  "provider": "Doubao",
+  "model_alias": "Doubao-Seed-2.1-lite",
+  "thinking": "disabled",
+  "credentials_file": "config.yaml",
+  "rules_file": "J20核心用户记忆维度与提取存储规划.md",
+  "photos": {
+    "enabled": true,
+    "allowed_hosts": [
+      "hipanda-cdn-ws.toycloud.com"
+    ],
+    "max_bytes": 10485760,
+    "max_pixels": 20000000,
+    "max_side": 1280,
+    "input_token_reserve": 4096
+  },
+  "export_html": true,
+  "parallel_users": 2,
+  "max_sessions": "all",
+  "source_review_batch_size": 8,
+  "summary_window_days": 30,
+  "summary_min_sessions": 2,
+  "gap_minutes": 30,
+  "max_calls": null,
+  "context_window_tokens": 65536,
+  "context_safety_tokens": 4096,
+  "session_chunk_tokens": 8192,
+  "history_context_tokens": 4096,
+  "rule_page_tokens": 8192,
+  "context_split_retries": 6,
+  "max_total_input_chars": null,
+  "max_output_tokens": 12000,
+  "timeout_seconds": 60,
+  "stage_max_attempts": 3,
+  "data_root": "core_users/seed_users_8_0907_0929/baseline_0907",
+  "user_selection": {
+    "mode": "selected",
+    "device_ids": [
+      "12354838B6678EAF",
+      "12354838B6678E41",
+      "12354838B6678E87",
+      "12354838B6678EAE",
+      "12354838B6678EB7"
+    ]
+  },
+  "output_dir": "output/memory_agent_seed_top5_0907_contract_fix_full"
+}

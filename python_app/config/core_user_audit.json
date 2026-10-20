@@ -1,0 +1,27 @@
+{
+  "candidate_count": 100,
+  "core_count": 50,
+  "timezone_offset": 8,
+  "min_date": "2020-01-01",
+  "max_date": "2026-09-07",
+  "device_pattern": "[0-9A-Fa-f]{16}",
+  "dialogue_statuses": ["0"],
+  "system_texts": ["[心跳]", "[系统欢迎语]", "heartbeat"],
+  "test_text_pattern": "测试测试|测试一下|功能测试|压力测试|接口测试|自动化测试|调试|test[ _-]?(?:case|ing)|hello world",
+  "asset_url_pattern": "(?:icon_toycloud|album_enter_|playing_bg|recording_bg|/assets/)",
+  "accuracy_warning": 500,
+  "test_min_count": 20,
+  "test_ratio": 0.05,
+  "dense_daily_turns": 500,
+  "repeat_ratio": 0.15,
+  "progress_every": 100000,
+  "说明": {
+    "时间": "Excel序列暂按中国本地时间，Unix秒/毫秒按UTC转换；不晚于导出日期2026-09-07。",
+    "有效对话": "用户已确认：text为用户输入，content为助手回复，status=0正常，del_flag=0未删除。",
+    "设备": "16位十六进制设备ID；不符合格式单列异常不参与排名。",
+    "测试嫌疑": "测试话术至少20次且占比>=5%、单日>=500轮、单句>=15%均只标记不自动排除。",
+    "图片": "有效URL和未删除元数据；明确应用素材命名仅作素材嫌疑，不认定真实照片。未访问链接。",
+    "精度": "accuracy大于500仅标记，单位未确认；定位不影响排名。",
+    "去重": "按源主键判断完全重复和冲突，冲突保留首条暂计并在报告标明，不覆盖原行。"
+  }
+}

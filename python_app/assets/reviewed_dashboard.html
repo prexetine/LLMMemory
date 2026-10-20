@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; base-uri 'none'">
+<title>蛋宝 · 已审核记忆档案</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6f0;color:#193e35;font:15px/1.65 "Microsoft YaHei",system-ui,sans-serif}
+header{background:#173e35;color:#ecf3e5;padding:22px 5vw;display:flex;justify-content:space-between;align-items:center;gap:20px}
+.brand{font-size:22px;font-weight:700;letter-spacing:2px}.sub{font-size:12px;letter-spacing:3px;opacity:.7}
+main{max-width:1420px;margin:auto;padding:35px 5vw}h1{font-size:36px;line-height:1.3;margin:10px 0 20px}h2{font-size:22px}
+.hero{background:#e6edda;border-radius:24px;padding:32px;display:flex;justify-content:space-between;gap:24px;align-items:center}
+.device{background:#f8faf4;border:1px solid #fff;padding:24px;border-radius:18px;overflow-wrap:anywhere}
+small,.muted{color:#64776c}.hero p{margin:6px 0}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:24px 0}
+.stat{padding:20px;background:#fff;border:1px solid #dfe6dc;border-radius:17px}.stat b{display:block;font-size:32px;margin-top:8px}
+.notice{background:#fff5e6;color:#81551d;border:1px solid #eddbbd;border-radius:12px;padding:14px 20px;margin-bottom:24px}
+nav,.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:18px 0}
+button,input,select{font:inherit;border:1px solid #d3dfd2;border-radius:10px;background:white;padding:10px 15px;color:inherit}
+button{cursor:pointer}button:hover{border-color:#658e77}button[aria-pressed=true]{background:#214f41;color:white}
+input{flex:1;min-width:190px}select{max-width:100%}button:focus-visible,input:focus-visible{outline:3px solid #7aa189}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.card{border:1px solid #dce5d8;background:white;border-radius:18px;padding:24px;text-align:left;display:flex;flex-direction:column;gap:12px;min-height:200px}
+.card h3{font-size:19px;margin:0}.card p{margin:0;overflow-wrap:anywhere}.card small{margin-top:auto}
+.tag{display:inline-block;background:#edf3e8;color:#476853;border-radius:6px;padding:3px 8px;font-size:12px;margin:3px 5px 3px 0}
+.map{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.tile{text-align:left;overflow-wrap:anywhere;background:#fff}.tile.filled{background:#dfead7}
+.tile b{display:block;font-size:14px}.line{background:white;padding:20px;border-radius:15px;border:1px solid #dee5d9;margin:12px 0;overflow-wrap:anywhere}
+.line p{margin:8px 0}.pill{padding:3px 9px;border-radius:6px;background:#ecf2e6}.warn{background:#fff0d8;color:#875714}
+dialog{border:0;border-radius:20px;padding:0;width:min(780px,93vw);max-height:90vh;color:inherit}dialog::backdrop{background:#15372ab0}
+.dialog-head{padding:24px 28px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:start;gap:15px}
+.dialog-body{padding:0 28px 28px}.quote{background:#f1f5eb;border-left:3px solid #7a9f6c;margin:12px 0;padding:14px;white-space:pre-wrap}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:13px}footer{margin-top:40px;padding-top:20px;border-top:1px solid #dce5d8;color:#6a7b6e;font-size:12px}
+.empty{padding:35px;text-align:center;background:#fff;border-radius:15px}.meta{overflow-wrap:anywhere;font-size:13px;color:#67796c}
+@media(max-width:1000px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.map{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:600px){header{padding:18px}.sub{display:none}main{padding:18px}h1{font-size:28px}.hero{display:block;padding:24px}.device{margin-top:18px;padding:15px}.stats{grid-template-columns:repeat(2,1fr);gap:10px}.grid{grid-template-columns:1fr}.map{grid-template-columns:repeat(2,minmax(0,1fr))}.card{min-height:170px}.dialog-head{padding:18px}.dialog-body{padding:0 18px 18px}}
+</style></head><body>
+<header><div class="brand">蛋宝记忆 <span class="sub">MEMORY ATLAS</span></div><span>审核后 · 多用户档案　<a id="report-link" hidden style="color:#d5ebc9">查看汇报版 ↗</a></span></header>
+<div class="filters" style="margin:22px 5vw"><label for="user-select">切换用户</label><select id="user-select" style="min-width:240px;background:#fff;color:#193e35" aria-label="切换用户"></select><small id="user-count"></small></div>
+<main><section class="hero"><div><small>REVIEWED MEMORY SNAPSHOT</small><h1>每一条记忆，都有依据。</h1><p>按产品维度查看正式记忆，回到原始对话核对证据。</p><p class="muted" id="run"></p></div><div class="device"><small>当前设备</small><h2 id="device"></h2><span class="tag">对话来源</span><span class="tag">本地只读快照</span></div></section>
+<section class="stats" id="stats"></section>
+<div class="notice" id="notice">机器 Review 通过不等于人工确认或客观事实核实。待定、拒绝与修订记录不属于正式记忆。</div>
+<nav aria-label="查看内容"><button data-view="memories" aria-pressed="true">正式记忆</button><button data-view="dimensions">106维度全览</button><button data-view="sessions">会话足迹</button><button data-view="reviews">审核记录</button></nav>
+<div class="filters"><input id="search" type="search" placeholder="搜索维度、记忆、关键词或证据…" aria-label="搜索"><select id="layer" aria-label="产品层"><option value="">全部产品层</option><option value="G">通用记忆</option><option value="P">产品必需</option><option value="E">探索记忆</option></select><button id="reset">重置</button></div>
+<p id="count" aria-live="polite" class="muted"></p><div id="content"></div>
+<footer>来源为本设备独立数据库 · 无联网请求 · 含用户原文和设备标识，请仅内部使用</footer>
+</main><dialog id="detail" aria-labelledby="title"><div class="dialog-head"><h2 id="title"></h2><button id="close" aria-label="关闭详情">关闭</button></div><div class="dialog-body" id="body"></div></dialog>
+<script id="memory-data" type="application/json">__MEMORY_DATA__</script>
+<script>
+"use strict";
+__MEMORY_DETAILS_JS__
+const PAYLOAD=JSON.parse(document.getElementById("memory-data").textContent),$=id=>document.getElementById(id);
+const USERS=PAYLOAD.users||[PAYLOAD];
+if(PAYLOAD.report_href){$("report-link").href=PAYLOAD.report_href;$("report-link").hidden=false}
+let D=USERS[0];
+const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let dims={};
+const decisions={skipped:"未执行（价值筛选）",approve:"通过",revise:"要求修订",defer:"待定",reject:"拒绝"};
+const checks={evidence:"证据",subject:"主体",dimension:"维度",semantics:"语义",scope:"范围",atomicity:"原子性",history:"历史关系",privacy:"隐私边界"};
+const marks={pass:"通过",fail:"未通过",uncertain:"不确定"};
+const stateNames={reviewed:"有效记忆",conflicted:"未解冲突",superseded:"已被替代",pending_control:"已停止有效使用",merged:"已归并到主记录"};
+const retentionNames={memory:"用户记忆",event:"事件记忆",session_record:"当次需求 · 会话记录",discard:"不生成记忆"};
+for(const [key,label] of [['event','事件记忆'],['session_record','当次需求记录']]){const b=document.createElement('button');b.dataset.view=key;b.textContent=label;document.querySelector('nav').append(b)}
+const lifecycle=document.createElement('button');lifecycle.dataset.view='maintenance';lifecycle.textContent='冲突与版本维护';document.querySelector('nav').append(lifecycle);
+const summariesButton=document.createElement('button');summariesButton.dataset.view='summaries';summariesButton.textContent='跨会话总结';document.querySelector('nav').append(summariesButton);
+let view="memories";
+USERS.forEach((user,i)=>{const option=document.createElement("option");option.value=String(i);option.textContent=user.device_id+" · "+({completed:"完成",partial:"部分完成",failed:"失败",pending:"待运行"}[user.run_status]||user.run_status);$("user-select").append(option)});
+$("user-count").textContent=USERS.length+" 个设备 · 切换仅改变展示，不混合用户数据";
+function updateUser(){
+ D=USERS[Number($("user-select").value)||0];
+ dims=Object.fromEntries(D.dimensions.map(d=>[d.id,d]));
+ $("detail").close();$("body").innerHTML="";$("search").value="";$("layer").value="";
+dims.UNCLASSIFIED={id:'UNCLASSIFIED',name:'已审核内容 · 未分类',rules:'产品标签尚未匹配；不是新增产品维度，不等于来源不可信。'};
+$("device").textContent=D.device_id;
+$("run").textContent="运行状态："+({completed:"流程完成",partial:"部分完成",failed:"运行失败",pending:"尚未运行"}[D.run_status]||D.run_status)+" · 已提交 "+D.sessions.length+" / "+D.selected_sessions+" 个会话";
+$("notice").textContent="机器 Review 通过不等于人工确认或客观事实核实。待定、拒绝与修订记录不属于正式记忆。";
+if(D.flow_version==='generic-flow-v1')$("notice").textContent+=' 当前采用通用事实流程；未分类正式内容可保存，技术待恢复任务见审核记录。';
+if(D.run_error)$("notice").textContent+=" 本次运行异常："+D.run_error;
+const covered=new Set(D.memories.filter(m=>m.state==='reviewed'&&m.retention!=='session_record').flatMap(m=>m.dimension_ids||[m.dimension])).size;
+$("stats").innerHTML=[["用户记忆",D.memories.filter(m=>m.state==='reviewed'&&(!m.retention||m.retention==='memory')).length],["事件记忆",D.memories.filter(m=>m.state==='reviewed'&&m.retention==='event').length],["当次需求记录",D.memories.filter(m=>m.state==='reviewed'&&m.retention==='session_record').length],["已提交会话",D.sessions.length]].map(([k,v])=>"<div class='stat'><small>"+k+"</small><b>"+v+"</b></div>").join("");
+render();
+}
+$("user-select").onchange=updateUser;
+function match(text){return String(text).toLowerCase().includes($("search").value.trim().toLowerCase())}
+function layer(id){return !$("layer").value||id.startsWith($("layer").value)}
+function memMatch(m){return (m.dimension_ids||[m.dimension]).some(layer)&&match([m.dimension,dims[m.dimension].name,m.claim,...m.keywords,...m.evidence.map(e=>e.quote)].join(" "))}
+function render(){
+ document.querySelector('.device .tag').textContent=D.source_scope==='dialogue_and_photo'?'对话 + 图片观察':'对话来源';
+ document.querySelector('.hero p').textContent='按产品维度查看正式记忆，回到来源证据核对；图片引用是画面标记，不是用户原话。';
+ document.querySelectorAll("[data-view]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.view===view)));
+ let content="";
+ if(["memories","event","session_record"].includes(view)){
+  const list=D.memories.filter(m=>m.state==='reviewed'&&(m.retention||'memory')===(view==='memories'?'memory':view)).filter(memMatch);$("count").textContent=list.length+" 条"+retentionNames[view==='memories'?'memory':view]+"；当次需求不计入长期偏好";
+  content="<div class='grid'>"+list.map(m=>"<button class='card' data-memory='"+esc(m.id)+"'><small>"+esc(m.dimension+" · "+dims[m.dimension].name)+"</small><h3>"+esc(m.claim)+"</h3><div>"+m.keywords.map(k=>"<span class='tag'>"+esc(k)+"</span>").join("")+"</div><small>Review通过 · 点击查看证据 ↗</small></button>").join("")+"</div>";
+  if(!list.length)content="<div class='empty'>当前没有匹配的正式记忆。<br>可查看审核记录；无记忆不代表用户没有相关信息。</div>";
+ }else if(view==="summaries"){
+  const rows=(D.summaries||[]).filter(s=>match(JSON.stringify(s))&&s.dimension_ids.some(layer));$("count").textContent=rows.length+' 条派生总结，不计入原始事实数量';content=summariesHTML(rows);
+ }else if(view==="maintenance"){
+  const list=D.memories.filter(m=>m.state!=='reviewed').filter(memMatch);$("count").textContent=list.length+" 条非有效记忆；双方有证据不等于双方都正确";
+  content=list.map(m=>"<article class='line'><span class='pill warn'>"+esc(stateNames[m.state]||m.state)+"</span> <button data-memory='"+esc(m.id)+"'>"+esc(m.claim)+"</button><p>版本 "+m.revision+" · 独立支持Session "+(m.support_count??'未统计')+"</p></article>").join('');
+  content+=(D.conflict_groups||[]).map(g=>"<article class='line'><b>冲突组 "+esc(g.conflict_group_id)+" · "+(g.status==='open'?'未解决':'已关闭')+"</b><p>"+esc(g.reason)+"</p><p>"+g.members.map(m=>esc(m.memory_id+' / v'+m.revision)).join('<br>')+"</p><small>"+esc(g.resolution?JSON.stringify(g.resolution):'没有默认正确方，不自动生成追问')+"</small></article>").join('');
+  content+="<details><summary>版本历史索引（"+(D.versions||[]).length+"）</summary>"+(D.versions||[]).map(v=>"<p>"+esc(v.memory_id+' / v'+v.revision+' / '+(stateNames[v.state]||v.state))+"</p>").join('')+"</details>";
+ }else if(view==="dimensions"){
+  const list=D.dimensions.filter(d=>layer(d.id)&&match(d.id+" "+d.name));$("count").textContent=list.length+" / 106 个产品维度";
+  content="<div class='map'>"+list.map(d=>{const n=D.memories.filter(m=>(m.dimension_ids||[m.dimension]).includes(d.id)).length;return "<button data-dimension='"+d.id+"' class='tile "+(n?"filled":"")+"'><small>"+d.id+" · "+n+" 条</small><b>"+esc(d.name)+"</b></button>"}).join("")+"</div>";
+ }else if(view==="sessions"){
+  const list=D.sessions.filter(s=>match(s.id+" "+s.start));$("count").textContent=list.length+" 个会话（UTC+8）；只展示已提交会话";
+  content=list.map(s=>"<article class='line'><b>"+esc(s.start.slice(0,16).replace("T"," ")+" · "+s.id)+"</b><p>"+s.turns+" 条有效用户话轮 · "+s.stored+" 条正式入库</p><small>"+(s.history_read?"已读取此前正式记忆":"未读到此前可用正式记忆")+"</small></article>").join("");
+ }else{
+  const list=D.reviews.filter(r=>layer(r.candidate.dimension_id)&&match(r.candidate.claim+" "+r.reason+" "+r.candidate.dimension_id));
+  $("count").textContent=list.length+" 次审核事件；含修订前后记录，不等于独立记忆数量";
+  content=list.map(r=>"<article class='line'><span class='pill "+(r.decision==="approve"?"":"warn")+"'>"+decisions[r.display_decision||r.decision]+"</span> <b>"+esc(r.candidate.dimension_id+" · "+r.candidate.claim)+"</b><p>"+esc(D.policy==="source-maintenance-v4"?"v4 · 三项来源审核":"旧审核策略 · 保留原结论")+"</p><p>来源审核 · "+esc(decisions[r.display_decision||r.decision])+"；保存控制 · "+esc(({allowed:"允许",blocked:"明确禁止",unresolved:"目标待核验"})[r.storage_control?.status]||"旧版未分离")+"；入库维护 · "+esc(({discarded:"不生成记忆",new:"新增",reinforce:"强化",coexist:"并存",supersede:"更新",conflict:"冲突",pending:"待处理"})[r.maintenance_action]||r.maintenance_action||"待处理")+"</p><p>"+esc(r.reason)+"</p><small>"+esc(r.session_id+" · "+r.reviewed_at)+"</small><details><summary>来源检查与原文摘录</summary><p>"+Object.entries(r.checks).map(([k,v])=>esc(checks[k]+": "+marks[v])).join(" · ")+"</p>"+r.candidate.evidence.map(e=>"<blockquote class='quote'>"+esc(e.quote)+"</blockquote><div class='meta'>"+esc(e.evidence_id)+"</div>").join("")+"</details></article>").join("");
+ }
+ if(view==='reviews') content+=(D.extraction_issues||[]).map(i=>"<article class='line'><b>提取待整理 · "+esc(i.raw_candidate?.claim||"未形成有效候选")+"</b><p>"+esc(i.reason)+"</p><small>尚未进入来源审核，不是正式记忆</small></article>").join("");
+ if(view==='reviews') content+=taskHTML(D.retry_tasks);
+ content+=executionHTML(D);
+ $("content").innerHTML=content||"<div class='empty'>暂无匹配记录。</div>";
+}
+function baseRecord(m){
+ return "<article class='line'><h3>"+esc(m.claim)+"</h3><p>主体："+esc(m.subject)+"<br>适用范围："+esc(m.scope)+"<br>关联维度："+(m.dimension_ids||[m.dimension]).map(esc).join('、')+(m.event?"<br>事件时间："+esc(m.event.time||m.event.time_text||'原文未说明')+"<br>事件人物："+esc(m.event.actor)+"<br>事件："+esc(m.event.description):'')+"<br>来源类型："+esc({self_report:"用户自述",observation:"行为观察",hypothesis:"假设"}[m.kind]||m.kind)+"<br>提取策略："+esc(m.skill_name)+"</p><div class='meta'>记忆ID："+esc(m.id)+"</div>"+m.evidence.map(e=>"<blockquote class='quote'>"+esc(e.quote)+"</blockquote><div class='meta'>"+esc(e.session+" · "+e.time+" · "+e.source+" / "+e.sheet+" / 第"+e.row+"行")+"</div>").join("")+"</article>";
+}
+function record(m){return baseRecord(m)+structureHTML(m.structure)+supportHTML(m.support_annotations)}
+document.addEventListener("click",e=>{
+ const nav=e.target.closest("[data-view]");if(nav){view=nav.dataset.view;render();return}
+ const b=e.target.closest("[data-memory],[data-dimension]");if(!b)return;
+ const m=D.memories.find(x=>x.id===b.dataset.memory),d=dims[m?m.dimension:b.dataset.dimension];
+ $("title").textContent=d.id+" · "+d.name;
+ const ms=m?[m]:D.memories.filter(x=>(x.dimension_ids||[x.dimension]).includes(d.id));
+ $("body").innerHTML=(ms.map(record).join("")||"<p>这个维度本次没有正式记忆。不能据此推断用户没有此信息。</p>")+"<details><summary>维度提取规范</summary><pre>"+esc(d.rules)+"</pre></details>";
+ $("detail").showModal();
+});
+$("close").onclick=()=>$("detail").close();
+$("search").oninput=render;$("layer").onchange=render;
+$("reset").onclick=()=>{$("search").value="";$("layer").value="";render()};
+updateUser();
+</script></body></html>

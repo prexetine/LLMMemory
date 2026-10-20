@@ -1,0 +1,12 @@
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.ps1 text eol=lf
+*.csv text eol=lf
+
+# 压缩数据必须按二进制处理，否则 git 的换行转换会损坏 gzip 流
+*.gz binary
+*.xlsx binary
+*.sqlite3 binary

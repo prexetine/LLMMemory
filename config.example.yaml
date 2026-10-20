@@ -1,0 +1,43 @@
+# 凭证配置示例 —— 复制为仓库根目录的 config.yaml 后填入真实值
+#
+#   1. 用法：把本文件复制到仓库根目录并改名为 config.yaml
+#         copy config.example.yaml config.yaml
+#   2. config.yaml 已被 .gitignore 忽略，禁止提交真实 key。
+#   3. 运行参数里通过 "credentials_file": "config.yaml" 引用本文件。
+#
+# 说明：memory_agent 只读取 provider（Doubao / Deepseek）对应的那一段，
+#       model_alias 必须能在该段的 model_map 中找到。其他段落即使存在也不会被读取。
+
+Doubao:
+  api_key: "<YOUR_DOUBAO_API_KEY>"
+  base_url: "https://ark.cn-beijing.volces.com/api/v3"
+  model_map:
+    # key   = 配置里的 model_alias
+    # value = 方舟推理接入点 ID（ep-xxxxxxxx），不是模型名
+    Doubao-Seed-2.0-pro: "<YOUR_ENDPOINT_ID>"
+    Doubao-Seed-2.0-lite: "<YOUR_ENDPOINT_ID>"
+    Doubao-Seed-2.0-mini: "<YOUR_ENDPOINT_ID>"
+    Doubao-Seed-2.1-pro: "<YOUR_ENDPOINT_ID>"
+    Doubao-Seed-2.1-lite: "<YOUR_ENDPOINT_ID>"
+    Doubao-Seed-2.1-turbo: "<YOUR_ENDPOINT_ID>"
+    # 图片链路仅允许 Seed2.0 Lite/Pro 与 2.1 Lite（见 agent_photos.options）
+    DeepSeek-V4-flash: "<YOUR_ENDPOINT_ID>"
+    DeepSeek-V4.1-flash: "<YOUR_ENDPOINT_ID>"
+    DeepSeek-V4-pro: "<YOUR_ENDPOINT_ID>"
+    GLM5.2: "<YOUR_ENDPOINT_ID>"
+    GLM5.3-Flash: "<YOUR_ENDPOINT_ID>"
+
+  image_model:
+    Doubao-Seedream_5.0_pro: "<YOUR_ENDPOINT_ID>"
+    Doubao-Seedream_5.0_lite: "<YOUR_ENDPOINT_ID>"
+    Doubao-Seedream_4.5: "<YOUR_ENDPOINT_ID>"
+
+  video_model:
+    Doubao-Seedance-2.0: "<YOUR_ENDPOINT_ID>"
+
+Deepseek:
+  api_key: "<YOUR_DEEPSEEK_API_KEY>"
+  base_url: "https://api.deepseek.com"
+  model_map:
+    Deepseek-Flash: "<YOUR_MODEL_NAME>"
+    Deepseek-Pro: "<YOUR_MODEL_NAME>"

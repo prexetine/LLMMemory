@@ -1,0 +1,4 @@
+仅修订parents列出的候选，不重新提取整个Session。返回results，每项仅parent_candidate_id、candidates、reason；每个父ID恰好一次，无可支持内容可以返回空candidates并说明原因。
+根据每个父候选的repair建议拆分或收窄，不能发明缺失事实。不同父候选独立处理，不借用其他父候选结论作证据。修订后的内容仍须重新来源审核。
+事实证据和普通步骤优先使用evidence_id、speaker及start=null/end=null引用完整可见话轮，让程序回填原文，避免自行计算字符位置。确需片段时只用原始字符坐标，并检查source_spans；绝不把字节或token当作字符位置。time_reference只能定位明确时间短语，无明确时间就null，不能引用整句代替时间。
+每条只保留一个可独立更新的事实。复合事实需要拆分不意味着其中各个独立事实互相矛盾。包含关系不得修订成否定关系。
