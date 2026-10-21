@@ -60,6 +60,8 @@ def resume_report(out: Path, sessions: list[dict]) -> dict:
         raise ValueError('续跑缺少数据库；不能仅凭报告确定已完成状态')
     recovered = []
     with closing(sqlite3.connect(database.as_uri() + '?mode=ro', uri=True)) as db:
+        if db.execute("SELECT 1 FROM sqlite_master WHERE name='session_protocol'").fetchone():
+            return resume_facts(db, sessions, report)
         for session in sessions:
             saved = committed_result(db, session)
             if saved is None:
@@ -72,4 +74,31 @@ def resume_report(out: Path, sessions: list[dict]) -> dict:
             recovered.append(old or saved)
     report['results'] = recovered
     logging.info('续跑从事务核实已提交Session=%s；这些会话不会重新提取或增加支持次数', len(recovered))
+    return report
+
+
+def resume_facts(db, sessions, report):
+    """新事实库只读恢复：数据库是状态真源，报告只贡献历史用量。"""
+    from agent_fact_store import FactStore
+    db.row_factory = sqlite3.Row
+    if db.execute("SELECT version FROM session_protocol").fetchone()[0] != "session-reliable-v2":
+        raise ValueError("旧事实协议仅支持只读导出，禁止跨协议续跑")
+    reader = object.__new__(FactStore)
+    reader.db = db
+    old = {r["session_id"]: r for r in report.get("results", [])}
+    results = []
+    for session in sessions:
+        rows = db.execute("SELECT input_hash,status FROM fact_sessions WHERE device_id=? AND session_id=?",
+                          (session["device_id"],session["session_id"])).fetchall()
+        if not rows:
+            continue
+        if len(rows) != 1 or rows[0]["input_hash"] != session["input_hash"]:
+            raise ValueError("事实库Session输入指纹不一致")
+        view = reader.session_result(session)
+        for key in ("usage", "elapsed_seconds", "model_calls", "tokens"):
+            if key in old.get(session["session_id"], {}):
+                view[key] = old[session["session_id"]][key]
+        results.append(view)
+    report["results"] = results
+    report["recovery_note"] = "状态由事实库恢复；缺失的历史耗时与用量保持未知"
     return report

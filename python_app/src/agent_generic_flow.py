@@ -519,10 +519,9 @@ class GenericPipeline:
                 r = copy.deepcopy(r)
                 session = data.get("session", dict(self.s, turns=data.get("evidence_pack", [])))
                 if role == "source_router":
-                    for signal in r.get("signals", []):
-                        signal["evidence"] = materialize_references(signal["evidence"], session)
-                        ref = signal.pop("switch_reference")
-                        signal["switch_evidence"] = materialize_references([ref], session)[0] if ref is not None else None
+                    # 路由只决定 Skill。旧模型即使附带 signals，也不能让可选
+                    # 的证据定位协议阻断整个 Session；复杂线索改由后续阶段处理。
+                    r["signals"] = []
                 else:
                     for row in r.get("results", []):
                         if "basis" in row:
@@ -605,20 +604,12 @@ class GenericPipeline:
 
     def extract_window(self, w, depth=0):
         def check(r):
-            exact_keys(r, {"skills","signals","reason"})
-            if not isinstance(r["skills"],list) or any(s not in SKILL_NAMES for s in r["skills"]) or len(set(r["skills"])) != len(r["skills"]) or not isinstance(r["reason"],str) or not isinstance(r["signals"],list):
+            # 新契约只有 skills/reason；为不中断旧缓存或模型偶发的 signals
+            # 字段，允许其存在但在 convert 中已经被明确丢弃。
+            if set(r) - {"skills", "reason", "signals"} or not {"skills", "reason"}.issubset(r):
                 raise ValueError("路由结构非法")
-            safe=[]
-            for signal in r["signals"]:
-                try: validate_signal(signal,w)
-                except NonMemoryControl as exc:
-                    self.record_validation("source_router:control",1,"ignored_non_memory_command",str(exc)); continue
-                if signal["kind"] == "subject_switch" and not explicit_subject_switch(signal):
-                    self.record_validation("source_router:subject",1,"ignored_unproven_switch","没有明确交接依据，不改变候选主体")
-                    continue
-                safe.append(signal)
-            r["signals"]=safe
-            if w.get("source_kind") == "photo" and r["signals"]: raise ValueError("图片不能产生保存控制")
+            if not isinstance(r["skills"],list) or any(s not in SKILL_NAMES for s in r["skills"]) or len(set(r["skills"])) != len(r["skills"]) or not isinstance(r["reason"],str) or r.get("signals") != []:
+                raise ValueError("路由结构非法")
         try:
             route = self.ask("source_router", ROUTER, {"session":w,"catalog":[{"skill_id":k,"name":v} for k,v in SKILL_NAMES.items()]},check)
             found = []

@@ -5,10 +5,29 @@ from agent_v4_schema import schema as legacy_schema
 
 def schema(role: str, data: dict) -> dict:
     s = {"type": "string"}
+    if role == "source_router":
+        return obj({"skills": arr(s), "reason": s})
+    if role == "source_control":
+        result = legacy_schema("source_router", data)
+        ref = obj(dict(evidence_id=s, speaker={"type":"string","enum":["user"]},
+                       start={"type":"null"}, end={"type":"null"}))
+        signal = result["properties"]["signals"]["items"]
+        signal["properties"]["evidence"] = arr(ref)
+        signal["properties"].update(switch_basis={"type":"string","enum":["none","handoff","self_identification"]},
+                                    switch_reference={"anyOf":[ref,{"type":"null"}]})
+        signal["required"] = list(signal["properties"])
+        return obj({"signals": arr(signal)})
     if role == 'source_relations':
-        from agent_relations import RELATIONS
+        if data.get("flow_version") == "fact-driven-v1":
+            relations = ["equivalent", "related_but_independent", "changed_with_direction", "contradictory", "insufficient_evidence"]
+        else:
+            from agent_relations import RELATIONS
+            relations = list(RELATIONS)
         ref=obj(dict(evidence_id=s,speaker={'type':'string','enum':['user']},start={'type':['integer','null']},end={'type':['integer','null']}))
-        return obj({'results':arr(obj(dict(pair_id=s,relation={'type':'string','enum':list(RELATIONS)},reason=s,basis_refs=arr(ref))))})
+        if data.get("flow_version") == "fact-driven-v1":
+            return obj({'results':arr(obj(dict(pair_id=s,relation={'type':'string','enum':relations},reason=s,basis_refs=arr(ref),
+                                              direction={'type':'string','enum':['none','left_replaces_right','right_replaces_left']})))})
+        return obj({'results':arr(obj(dict(pair_id=s,relation={'type':'string','enum':relations},reason=s,basis_refs=arr(ref))))})
     if role == "source_classifier":
         return obj({"results": arr(obj({"candidate_id": s, "dimension_ids": arr(s), "reason": s}))})
     if role == "source_consistency":

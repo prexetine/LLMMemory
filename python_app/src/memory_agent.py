@@ -32,6 +32,10 @@ BASE = Path(__file__).resolve().parents[2]
 def execute_session(agent, session: dict, out: Path, config: dict, client) -> dict:
     """Session级异常隔离：恢复一次，仍失败落盘上报；不可安全保存则停止。"""
     agent.session_attempt_budget = Counter()
+    if config.get("flow_version") == "fact-driven-v1":
+        from agent_fact_store import FactStore
+        FactStore(agent.store.db).ensure_protocol()
+        FactStore(agent.store.db).save_receipt(session)
     errors = []
     for attempt in (1, 2):
         stage = "photo_binding" if session.get("source_kind") == "photo" else "extraction"
@@ -63,6 +67,13 @@ def execute_session(agent, session: dict, out: Path, config: dict, client) -> di
                 execution_status="awaiting_retry", commit_status="not_committed",
                 retry_tasks=[dict(stage=stage, session_id=session["session_id"], candidate_ids=[], evidence_ids=[],
                     code=type(exc).__name__, retryable=True, status="retryable", reason=str(exc))])
+            if config.get("flow_version") == "fact-driven-v1":
+                task = dict(task_id=digest([session["input_hash"], stage]), stage=stage,
+                            state="technical_retry", candidate_ids=[], reason=str(exc), attempts=attempt)
+                receipt = FactStore(agent.store.db).commit_session(session, [], [], {}, [], [task])
+                result.update(FactStore(agent.store.db).session_result(session))
+                result.update(status="failed", commit_status="partial", errors=errors,
+                              error=f"{type(exc).__name__}: {exc}", session_attempts=attempt)
             files = ["session_failures.jsonl"]
             if session.get("source_kind") == "photo":
                 files.append("photo_failures.jsonl")
@@ -82,6 +93,9 @@ class CentralAgent:
         self.config, self.trace_path = config, trace_path
 
     def run_session(self, session: dict) -> dict:
+        if self.config.get("flow_version") == "fact-driven-v1":
+            from agent_fact_flow import FactDrivenPipeline
+            return FactDrivenPipeline(self, session).run()
         from agent_generic_flow import GenericPipeline
         return GenericPipeline(self, session).run()
 
@@ -134,7 +148,7 @@ def run(config_path: Path, mode: str, output_override: str | None = None, resume
     """批次加独占锁；旧单用户入口保持兼容。"""
     config = json.loads(config_path.read_text(encoding="utf-8"))
     validate_flow(config)
-    if mode == 'live' and config['flow_version'] == 'generic-flow-v3-relations':
+    if mode == 'live' and config['flow_version'] in ('generic-flow-v3-relations', 'fact-driven-v1'):
         from bge_lifecycle import managed_encoder
         with managed_encoder(config['retrieval']):
             return run_dispatch(config_path, config, mode, output_override, resume)
@@ -146,6 +160,14 @@ def run_dispatch(config_path: Path, config: dict, mode: str, output_override: st
     if "user_selection" not in config:
         code = run_one(config, mode, output_override, resume)
         if mode == "live" and config.get("export_html"):
+            if config.get("flow_version") == "fact-driven-v1":
+                from export_fact_memory_html import export_fact_html
+                view_store = MemoryStore(out / "memory.sqlite3")
+                try:
+                    export_fact_html(view_store.db, out / "index.html")
+                finally:
+                    view_store.close()
+                return code
             from export_memory_html import export_user
             out = Path(output_override) if output_override else BASE / config["output_dir"]
             try:
@@ -182,7 +204,8 @@ def run_batch(config_path: Path, mode: str, output_override: str | None = None, 
     settings = {k: v for k, v in config.items() if k not in ("output_dir", "parallel_users")}
     settings = semantic_config(settings)
     batch = {"device_ids": devices, "config_hash": digest(settings),
-             "review_version": policy_version(config), "initial_mode": mode, "flow_version": flow}
+             "review_version": policy_version(config), "initial_mode": mode, "flow_version": flow,
+             "session_protocol": config.get("session_protocol")}
     manifest_path = out / "batch_manifest.json"
     if resume:
         if not manifest_path.is_file():
@@ -231,7 +254,11 @@ def run_batch(config_path: Path, mode: str, output_override: str | None = None, 
         if mode == "live" and config.get("export_html"):
             from export_memory_html import export_index
             try:
-                export_index(out, rows, rules=BASE / config["rules_file"])
+                if config.get("flow_version") == "fact-driven-v1":
+                    from export_fact_memory_html import export_fact_index
+                    export_fact_index(out, rows)
+                else:
+                    export_index(out, rows, rules=BASE / config["rules_file"])
                 for finished in rows:
                     finished["html"] = str(out / "index.html")
                 logging.info("多用户汇总HTML已更新：%s", out / "index.html")
@@ -314,7 +341,7 @@ def run_one(config: dict, mode: str, output_override: str | None = None, resume:
     elif out.exists() and any(p.name != "logs" for p in out.iterdir()):
         raise ValueError("输出目录非空；为防止覆盖请指定新的--output目录")
     completed_ids = {r["session_id"] for r in previous_report.get("results", [])
-                     if r["status"] == "completed"}
+                     if r["status"] == "completed" and not (config.get("flow_version") == "fact-driven-v1" and r.get("retry_tasks"))}
     completed_count = sum(s["session_id"] in completed_ids for s in sessions)
     logging.info("用户=%s 会话统计：有效Session总数=%s，本次选中=%s，已完成=%s，待处理=%s",
                  config["device_id"], total_sessions, len(sessions), completed_count,
@@ -326,6 +353,7 @@ def run_one(config: dict, mode: str, output_override: str | None = None, resume:
         "registry_version": registry.version, "skill_catalog": registry.catalog(), "mode": mode,
         "review_version": policy_version(config),
         "flow_version": config.get("flow_version", "legacy"),
+        "session_protocol": config.get("session_protocol"),
         "context_config_hash": context_config_hash,
     }, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     if mode == "prepare":
@@ -333,11 +361,16 @@ def run_one(config: dict, mode: str, output_override: str | None = None, resume:
                           "sessions": len(sessions), "dimensions": len(registry.dimensions)}, ensure_ascii=False))
         return 0
     store = MemoryStore(out / "memory.sqlite3")
-    from agent_maintenance import V4Store
-    V4Store(store)
+    if config.get("flow_version") != "fact-driven-v1":
+        from agent_maintenance import V4Store
+        V4Store(store)
     started = time.perf_counter()
     tracemalloc.start()
-    results, failed = list(previous_report.get("results", [])), None
+    results = list(previous_report.get("results", []))
+    if config.get("flow_version") == "fact-driven-v1":
+        # 事实已入库但仍有技术任务的Session必须重新进入调度；旧报告条目由新结果替换。
+        results = [row for row in results if not row.get("retry_tasks")]
+    failed = None
     client = None
     try:
         client = JsonClient(config, BASE / config["credentials_file"], out / "model_calls.jsonl")
@@ -345,11 +378,16 @@ def run_one(config: dict, mode: str, output_override: str | None = None, resume:
         for session_index, s in enumerate(sessions, 1):
             if stop_requested():
                 raise KeyboardInterrupt()
-            if any(r["session_id"] == s["session_id"] for r in results):
-                row = store.db.execute("SELECT input_hash,status FROM sessions WHERE device_id=? AND session_id=?",
-                                       (s["device_id"], s["session_id"])).fetchone()
-                if row is None or row["input_hash"] != s["input_hash"] or row["status"] != "completed":
-                    raise ValueError("已完成报告与数据库状态不一致")
+            if s["session_id"] in completed_ids:
+                if config.get("flow_version") == "fact-driven-v1":
+                    from agent_fact_store import FactStore
+                    if not FactStore(store.db).session_completed(s):
+                        raise ValueError("已完成报告与事实库状态不一致")
+                else:
+                    row = store.db.execute("SELECT input_hash,status FROM sessions WHERE device_id=? AND session_id=?",
+                                           (s["device_id"], s["session_id"])).fetchone()
+                    if row is None or row["input_hash"] != s["input_hash"] or row["status"] != "completed":
+                        raise ValueError("已完成报告与数据库状态不一致")
                 logging.info("续跑跳过已完成session=%s", s["session_id"])
                 continue
             logging.info("用户=%s Session=%s/%s 处理session=%s turns=%s",
@@ -359,7 +397,11 @@ def run_one(config: dict, mode: str, output_override: str | None = None, resume:
                 result = execute_session(agent, s, out, config, client)
                 usage_state["status"] = result.get("execution_status") or ("completed_with_pending_extraction" if result.get("needs_attention") else result.get("status", "unknown"))
                 results.append(result)
-            store.export_book(out / "记忆书页.md", registry)
+            if config.get("flow_version") == "fact-driven-v1":
+                from export_fact_memory_html import export_fact_html
+                export_fact_html(store.db, out / "index.html")
+            else:
+                store.export_book(out / "记忆书页.md", registry)
     except KeyboardInterrupt:
         failed = "interrupted: 用户或运行器中断，未完成链路"
         logging.error(failed)
@@ -369,6 +411,24 @@ def run_one(config: dict, mode: str, output_override: str | None = None, resume:
     finally:
         _, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
+        if not failed and config.get("flow_version") == "fact-driven-v1":
+            # 分析层在事实 Session 已提交后执行。其失败必须写入最终状态，
+            # 但不能从 finally 再抛异常，导致既有提交与运行报告一并丢失。
+            try:
+                from agent_analysis_observations import aggregate, load_candidate_events
+                from agent_fact_store import FactStore
+                analysis_config = config.get("analysis_observations", {})
+                if not isinstance(analysis_config, dict):
+                    raise ValueError("analysis_observations必须为对象")
+                events = load_candidate_events(BASE / config["data_root"], config["device_id"],
+                                               float(analysis_config.get("max_location_accuracy_m", 200)))
+                saved = FactStore(store.db).save_analysis(aggregate(events))
+                logging.info("用户=%s 分析观察：原始合格事件=%s，跨日期观察=%s", config["device_id"], len(events), saved)
+                from export_fact_memory_html import export_fact_html
+                export_fact_html(store.db, out / "index.html")
+            except Exception as exc:
+                failed = "analysis_observation: " + type(exc).__name__ + ": " + str(exc)
+                logging.exception("分析观察未完成；事实 Session 已保留，可单独修复后续跑")
         all_calls = []
         if (out / "model_calls.jsonl").exists():
             all_calls = [json.loads(line) for line in (out / "model_calls.jsonl").read_text(encoding="utf-8").splitlines()]
@@ -397,8 +457,15 @@ def run_one(config: dict, mode: str, output_override: str | None = None, resume:
                                            for role in sorted({c.get("role", "unknown") for c in all_calls})},
                   "metrics_note": "batch_metrics为已返回Session的流程计数（含缓存标记）；actual_calls_by_role来自实际调用日志，包含失败重试。",
                   "recovery_note": previous_report.get("recovery_note"),
-                  "quality": "未经过独立人工标注，非106维度质量验收"}
+                  "quality": ("未经过独立人工标注；事实驱动结果不以106维命中率作为质量验收。"
+                              if config.get("flow_version") == "fact-driven-v1"
+                              else "未经过独立人工标注，非106维度质量验收")}
         report.update(summarize_results(results,len(sessions)))
+        if config.get("flow_version") == "fact-driven-v1":
+            report["session_protocol"] = config["session_protocol"]
+            report["session_conclusions"] = dict(Counter(r.get("conclusion", "technical_pending") for r in results))
+            report["evidence_saved_sessions"] = store.db.execute("SELECT COUNT(*) FROM fact_sessions").fetchone()[0]
+            report["fully_processed_sessions"] = sum(not r.get("retry_tasks") and r.get("status") == "completed" for r in results)
         report["actual_stage_metrics"]=summarize_calls(all_calls,results)
         if not failed and (report["technical_pending_sessions"] or report["unvisited_sessions"]):
             report["status"]="partial"
@@ -407,7 +474,7 @@ def run_one(config: dict, mode: str, output_override: str | None = None, resume:
                  f"- 用户设备：{config['device_id']}", f"- 状态：{report['status']}",
                  f"- 会话：{len(results)}/{len(sessions)}；模型调用：{report['model_calls']}；token：{report['tokens']}",
                  f"- 耗时：{report['elapsed_seconds']}秒；Python追踪峰值：{peak}字节（不含远端模型）",
-                 f"- 会话选择：{config['max_sessions']}；实际选中{len(sessions)}个处理单元（图片一张一个Session）；图片完成{report['photo_completed']}/{report['photo_sessions']}；定位、通话和统计聚合未处理，向量disabled。",
+                 f"- 会话选择：{config['max_sessions']}；实际选中{len(sessions)}个处理单元（图片一张一个Session）；图片完成{report['photo_completed']}/{report['photo_sessions']}；语义召回配置：{config.get('retrieval', {}).get('backend', '参见运行配置')}。",
                  "- 正式记忆均通过逐条Review；不是人工确认或外部事实核实。旧候选不自动升级。", ""]
         if failed:
             lines.append(f"失败原因：{failed}")

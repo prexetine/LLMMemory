@@ -14,7 +14,7 @@ from agent_v3_contracts import ModelOutputError
 
 STAGE_VERSION = "stage-runtime-1"
 STAGE_VERSIONS = {name: 1 for name in ("source_router", "source_extractor", "source_reviewer", "source_repair", "source_consistency", "source_classifier", "history_compare")}
-STAGE_VERSIONS.update(source_router=3, source_reviewer=3, history_compare=2, source_extractor=3, source_repair=4, source_relations=3, source_classifier=3)
+STAGE_VERSIONS.update(source_router=4, source_control=1, source_reviewer=3, history_compare=2, source_extractor=3, source_repair=4, source_relations=4, source_classifier=3)
 
 
 def stage_version(role: str) -> int:
@@ -80,7 +80,7 @@ class StageRuntime:
         from agent_contracts import VERSION
         from agent_prompts import PHOTO_NOTICE
         data = dict(data, policy=VERSION)
-        if self.p.s.get("source_kind") == "photo" and role not in ("history_compare", "source_classifier", "source_relations"):
+        if self.p.s.get("source_kind") == "photo" and role not in ("history_compare", "source_classifier", "source_relations", "dimension_mapper"):
             prompt += PHOTO_NOTICE
         key = self.fingerprint(role, prompt, data)
         unit = unit_key or key
@@ -101,6 +101,8 @@ class StageRuntime:
                 self.p.stats[role + ":cached"] += 1
                 return value
         maximum = self.p.a.config.get("stage_max_attempts", 3)
+        if self.p.a.config.get("flow_version") == "fact-driven-v1":
+            maximum = min(maximum, 2)
         if type(maximum) is not int or not 1 <= maximum <= 3:
             raise ValueError("stage_max_attempts必须为1至3的整数")
         remaining = maximum - self.attempts[unit]

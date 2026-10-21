@@ -10,6 +10,14 @@ PROCESSING_REVISION = "contract-fix-2026-10-13-1"
 def validate_flow(config: dict, previous: dict | None = None) -> str:
     """生产只允许当前执行版本；旧配置不自动升级。"""
     flow = config.get("flow_version")
+    if config.get("dimension_mapping") not in (None, "fact-dimensions-106-v1"):
+        raise ValueError("未知106维映射版本")
+    if type(config.get("dimension_mapping_batch_size", 8)) is not int or config.get("dimension_mapping_batch_size", 8) < 1:
+        raise ValueError("dimension_mapping_batch_size必须为正整数")
+    if flow == "fact-driven-v1" and config.get("session_protocol") != "session-reliable-v2":
+        raise ValueError("旧事实配置停止执行；请使用 memory_agent_reliable_v2_* 配置及独立输出目录")
+    if flow == "fact-driven-v1" and previous and previous.get("session_protocol") != "session-reliable-v2":
+        raise ValueError("旧事实报告禁止跨协议续跑，请使用独立输出目录")
     if config.get('token_estimator','utf8_bytes_legacy') not in ('utf8_bytes_legacy','mixed_chars_v1'):
         raise ValueError('未知token_estimator')
     if config.get('extraction_execution') not in (None,'isolated-skill-batch-repair-v1'):
@@ -29,7 +37,7 @@ def validate_flow(config: dict, previous: dict | None = None) -> str:
         raise ValueError('联合提取配置extraction_contract已停用；请使用原独立Skill配置，不得续写联合提取结果')
     if 'history_page_bytes' in config and (type(config['history_page_bytes']) is not int or config['history_page_bytes'] < 1024):
         raise ValueError('history_page_bytes必须为至少1024的整数')
-    if flow not in (FLOW, 'generic-flow-v3-relations'):
+    if flow not in (FLOW, 'generic-flow-v3-relations', 'fact-driven-v1'):
         raise ValueError(f"旧版或未知flow_version={flow!r}已停止执行；请使用memory_agent_generic_flow.json和独立输出目录")
     obsolete = {"review_strategy", "max_agent_steps", "max_audit_rounds", "history_limit", "network_retries", "model_output_attempts"} & config.keys()
     if obsolete:
@@ -37,7 +45,7 @@ def validate_flow(config: dict, previous: dict | None = None) -> str:
     attempts = config.get("stage_max_attempts", 3)
     if type(attempts) is not int or not 1 <= attempts <= 3:
         raise ValueError("stage_max_attempts必须为1至3的整数")
-    if flow == 'generic-flow-v3-relations':
+    if flow in ('generic-flow-v3-relations', 'fact-driven-v1'):
         retrieval = config.get('retrieval', {})
         if not isinstance(retrieval, dict) or not retrieval.get('service_config'):
             raise ValueError('新关系流程需要本地retrieval.service_config')

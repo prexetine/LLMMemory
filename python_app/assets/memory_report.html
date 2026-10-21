@@ -38,13 +38,44 @@ function showTab(t){tab=t;document.querySelectorAll('.panel').forEach(p=>p.hidde
 function showFilter(status='',dimension=''){chosenDimension=dimension;$('statusFilter').value=status;$('search').value='';$('layerFilter').value='';page=0;renderCards();showTab('memories')}
 function renderCards(){const q=$('search').value.trim().toLowerCase(),s=$('statusFilter').value,l=$('layerFilter').value;const cs=user().cards.filter(c=>(!s||c.status===s)&&(!l||(c.dimension_ids||[c.dimension]).some(d=>d.startsWith(l)))&&(!chosenDimension||(c.dimension_ids||[c.dimension]).includes(chosenDimension))&&(!q||(JSON.stringify(c)+' '+dim(c.dimension).name).toLowerCase().includes(q)));const pages=Math.max(1,Math.ceil(cs.length/PAGE_SIZE));page=Math.min(page,pages-1);$('cards').innerHTML=cs.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE).map(cardHTML).join('')||'<div class="empty">该筛选条件下没有条目。</div>';$('resultCount').textContent=cs.length+' / '+user().cards.length+' 条展示记录';$('pageCount').textContent=(page+1)+' / '+pages+' 页';$('prev').disabled=page===0;$('next').disabled=page===pages-1;$('dimensionFilter').hidden=!chosenDimension;$('dimensionFilter').textContent=chosenDimension?'当前维度：'+chosenDimension+' '+dim(chosenDimension).name+'（点击重置可取消）':''}
 const stages={pass:'通过',pending:'待确认',reject:'拒绝',skipped:'未执行（价值筛选）',discarded:'不生成记忆',merged:'已归并',allowed:'允许',blocked:'明确禁止',unresolved:'目标待核验',legacy:'旧版未分离',new:'新增',reinforce:'强化',coexist:'并存',supersede:'更新',conflict:'冲突',reviewed:'已入库',pending_control:'停止使用',superseded:'被替代',conflicted:'未解冲突'};
-function stageHTML(c){return '<div class="meta"><b>'+(c.policy==='source-maintenance-v4'?'v4 · 三项来源审核':'旧审核策略 · 保留原结论')+'</b><br>来源审核 · '+esc(stages[c.source_decision]||c.source_decision||'待确认')+'<br>保存控制 · '+esc(stages[c.storage_control?.status]||'旧版未分离')+'<br>入库维护 · '+esc(stages[c.maintenance_action]||c.maintenance_action||'待处理')+(c.storage_control?.reason?'<br>'+esc(c.storage_control.reason):'')+(c.block_reason&&c.maintenance_action==='pending'?'<br>阻断原因 · '+esc(c.block_reason):'')+(c.parent_candidate_id?'<br>修订来源 · '+esc(c.parent_candidate_id):'')+'</div>'}
+function stageHTML(c){return '<div class="meta"><b>'+(c.policy==='session-reliable-v2'?'事实驱动 · 可靠保存 v2':c.policy==='source-maintenance-v4'?'v4 · 三项来源审核':'旧审核策略 · 保留原结论')+'</b><br>来源审核 · '+esc(stages[c.source_decision]||c.source_decision||'待确认')+'<br>保存控制 · '+esc(stages[c.storage_control?.status]||'旧版未分离')+'<br>入库维护 · '+esc(stages[c.maintenance_action]||c.maintenance_action||'待处理')+(c.storage_control?.reason?'<br>'+esc(c.storage_control.reason):'')+(c.block_reason&&c.maintenance_action==='pending'?'<br>阻断原因 · '+esc(c.block_reason):'')+(c.parent_candidate_id?'<br>修订来源 · '+esc(c.parent_candidate_id):'')+'</div>'}
 const baseCardHTML=cardHTML;cardHTML=c=>baseCardHTML(c).replace('<details>', stageHTML(c)+'<div class="meta">'+(c.revision?'版本 '+esc(c.revision)+' · 独立支持Session '+esc(c.support_count??'未统计'):'')+(c.conflict_groups?.length?'<br>冲突组 '+c.conflict_groups.map(esc).join('、'):'')+'</div><details>');
 const versionCardHTML=cardHTML;cardHTML=c=>versionCardHTML(c).replace('<details>', '<div class="meta">关联维度 · '+(c.dimension_ids||[c.dimension]).map(esc).join('、')+(c.event?'<br>事件人物 · '+esc(c.event.actor)+'<br>事件时间 · '+esc(c.event.time||c.event.time_text||'原文未说明')+'<br>事件 · '+esc(c.event.description)+'<br>话轮顺序 · '+esc(Number(c.event.order)+1):'')+'</div><details>');
 const stateStyle=document.createElement('style');stateStyle.textContent='.card.conflicted{border-top-color:#a45675}.tag.conflicted{background:#f4e4ec;color:#85445f}.card.superseded{border-top-color:#82908c;opacity:.85}.tag.superseded{background:#e9edeb;color:#596761}';document.head.append(stateStyle);
 function dimStats(id){return user().cards.filter(c=>(c.dimension_ids||[c.dimension]).includes(id)).reduce((a,c)=>{a[c.status]=(a[c.status]||0)+1;if(['event','session_record'].includes(c.status))a.confirmed++;return a},{confirmed:0,pending:0,rejected:0,conflicted:0,superseded:0})}
 const structuredCardHTML=cardHTML;cardHTML=c=>structuredCardHTML(c).replace('</article>',structureHTML(c.structure)+supportHTML(c.support_annotations)+'</article>');
-function renderDims(){const q=$('dimSearch').value.trim().toLowerCase(),ds=user().dimensions.filter(d=>(d.id+' '+d.name).toLowerCase().includes(q));$('dimRows').innerHTML=ds.map(d=>{const n=dimStats(d.id);let note=n.confirmed?'有正式记忆':n.pending?'仅候选，尚未确认':n.rejected?'仅拒绝候选':'未形成展示条目';if(n.confirmed&&n.pending)note+='，仍有候选待确认';if(user().run_status!=='completed')note+='；本批尚未全量完成';return '<tr><td><button class="linkbtn" data-dim="'+esc(d.id)+'">'+esc(d.id)+' '+esc(d.name)+'</button><div class="dimdef">'+esc(typeof d.rules==='string'?d.rules:JSON.stringify(d.rules))+'</div></td><td>'+n.confirmed+'</td><td>'+n.pending+'</td><td>'+n.rejected+'</td><td>'+esc(note)+'</td></tr>'}).join('');$('dimCount').textContent=ds.length+' / '+user().dimensions.length+' 个维度'}
+function dimensionMemories(id){return user().cards.filter(c=>(c.dimension_ids||[c.dimension]).includes(id))}
+function dimensionDetails(d){
+ const cs=dimensionMemories(d.id);
+ const waiting=user().cards.flatMap(c=>(c.mapping_deferred||[]).filter(x=>x.dimension_id===d.id).map(x=>({c,x})));
+ const deferred=waiting.length?'<details><summary>条件待补 '+waiting.length+' 条 · 不计入已映射</summary>'+waiting.map(({c,x})=>'<p><strong>'+esc(c.claim)+'</strong><br>主体：'+esc(c.subject)+'<br>'+esc(x.reason)+'</p>').join('')+'</details>':'';
+ if(!cs.length)return '<div class="muted">该维度暂无记忆或候选。</div>'+deferred;
+ const stored=cs.filter(c=>['confirmed','event','session_record'].includes(c.status)).length;
+ return '<details class="dimension-memories" data-dimension-details="'+esc(d.id)+'"><summary>展开查看 '+esc(d.name)+' · '+cs.length+' 条（当前有效 '+stored+' 条，其余 '+(cs.length-stored)+' 条）</summary><div class="cards"></div></details>'+deferred;
+}
+document.addEventListener('toggle',e=>{
+ const box=e.target;
+ if(!box.matches?.('[data-dimension-details]')||!box.open||box.dataset.loaded)return;
+ box.querySelector('.cards').innerHTML=dimensionMemories(box.dataset.dimensionDetails).map(cardHTML).join('');
+ box.dataset.loaded='true';
+},true);
+const dimensionStyle=document.createElement('style');
+dimensionStyle.textContent='.dimension-memories>summary{padding:10px 0;color:var(--green);font-weight:600}.dimension-memories .cards{padding:12px 0}.dimension-memories .card{font-size:13px}.dimtable td.dimension-content{padding-top:0;background:#f8faf8}';
+document.head.append(dimensionStyle);
+function renderDims(){
+ const q=$('dimSearch').value.trim().toLowerCase(),ds=user().dimensions.filter(d=>(d.id+' '+d.name).toLowerCase().includes(q));
+ $('dimRows').innerHTML=ds.map(d=>{
+  const n=dimStats(d.id),effective=n.confirmed||0;
+  let note=effective?'有有效记忆/事件/当次记录':n.pending?'仅候选，尚未确认':n.conflicted?'有未解冲突':n.rejected?'仅拒绝候选':n.superseded?'仅历史版本':'暂无已映射条目；不代表没有相关信息';
+  if(effective&&n.pending)note+='，仍有候选待确认';
+  if(user().run_status!=='completed')note+='；本批尚未全量完成';
+  return '<tr><td><button class="linkbtn" data-dim="'+esc(d.id)+'">'+esc(d.id)+' '+esc(d.name)+'</button><div class="dimdef">'+esc(typeof d.rules==='string'?d.rules:JSON.stringify(d.rules))+'</div></td><td>'+effective+'</td><td>'+(n.pending||0)+'</td><td>'+(n.rejected||0)+'</td><td>'+esc(note)+'</td></tr><tr><td colspan="5" class="dimension-content">'+dimensionDetails(d)+'</td></tr>';
+ }).join('');
+ const total=user().dimensions.filter(d=>d.id!=='UNCLASSIFIED').length;
+ $('dimCount').textContent=ds.filter(d=>d.id!=='UNCLASSIFIED').length+' / '+total+' 个产品维度；未分类单列';
+ const kpi=document.querySelector('#kpis [data-tab="dimensions"] b');
+ if(kpi)kpi.textContent=total;
+}
 function bars(status){const list=user().dimensions.map(d=>[d.id+' '+d.name,dimStats(d.id)[status]]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]).slice(0,5);return list.map(([name,n])=>'<div class="barrow"><span>'+esc(name)+'</span><div class="bar '+(status==='pending'?'amber':'')+'"><i style="width:'+(100*n/list[0][1])+'%"></i></div><em>'+n+'</em></div>').join('')||'<p class="muted">当前没有这类条目。</p>'}
 function render(){const u=user(),n=u.counts;$('device').textContent=u.device_id;$('runStatus').textContent=u.run_status==='completed'?'所选会话流程已完成；待确认候选仍单独保留。':'本批仍有未完成会话，不将暂存候选视为正式入库。';$('sessionRatio').textContent=u.committed_sessions+' / '+u.selected_sessions;$('progressBar').style.width=(u.selected_sessions?100*u.committed_sessions/u.selected_sessions:0)+'%';$('scope').textContent=u.source_scope==='dialogue_only'?'仅对话来源 · 通话 / 定位 / 照片未计入本批':'来源范围：'+u.source_scope;
 if(u.source_scope==='dialogue_and_photo')$('scope').textContent='对话 + 图片观察 · 通话 / 定位未分析';

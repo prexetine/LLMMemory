@@ -16,6 +16,15 @@ def arr(items: dict) -> dict:
 
 def response_schema(role: str, data: dict) -> dict | None:
     """按中心/提取/复核角色生成严格结构，不允许新增动态键。"""
+    if role == "dimension_mapper":
+        string = {"type": "string"}
+        dimension = {"type": "string", "enum": [r["dimension_id"] for r in data["catalog"]]}
+        return obj({"results": arr(obj({
+            "fact_id": {"type": "string", "enum": [r["fact_id"] for r in data["facts"]]},
+            "matches": arr(obj({"dimension_id": dimension, "reason": string, "evidence_ids": arr(string)})),
+            "deferred": arr(obj({"dimension_id": dimension, "reason": string})),
+            "reason": string,
+        }))})
     if role.startswith("source_") or role == "history_compare":
         if data.get("flow_version") in ("generic-flow-v1", "generic-flow-v2", "generic-flow-v3-relations"):
             from agent_flow_schema import schema
