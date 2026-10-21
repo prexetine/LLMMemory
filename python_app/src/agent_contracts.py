@@ -237,7 +237,7 @@ def verify_seal(record: dict) -> None:
 
 def source_matches(proof: dict, candidate: dict) -> bool:
     """新来源凭证只绑定事实；旧凭证仍按原完整候选校验。"""
-    if candidate.get("flow_version") in ("generic-flow-v2", "generic-flow-v3-relations"):
+    if candidate.get("flow_version") in ("generic-flow-v2", "generic-flow-v3-relations", "fact-driven-v1"):
         from agent_flow_data import content_hash
         return proof.get("source_content_hash") == content_hash(candidate) and proof.get("candidate_id") == candidate.get("candidate_id")
     return proof.get("candidate_hash") == digest(candidate)
@@ -249,6 +249,10 @@ def verify_source(proof: dict, candidate: dict, session: dict) -> None:
         from agent_flow_data import content_hash
         if proof["source_content_hash"] != content_hash(candidate):
             raise ValueError("分类之外的事实内容已改变，必须重新审核")
+    if "content_key" in candidate:
+        from agent_fact_model import content_key
+        if candidate["content_key"] != content_key(candidate):
+            raise ValueError("派生事实标识与当前事实内容不一致")
     if (proof.get("policy") != VERSION or not source_matches(proof,candidate)
             or proof.get("candidate_version") != candidate["candidate_version"]
             or proof.get("input_hash") != session["input_hash"] or proof.get("device_id") != session["device_id"]

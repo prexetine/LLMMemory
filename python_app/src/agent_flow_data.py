@@ -173,9 +173,9 @@ def compact_fact(c: dict) -> dict:
 
 
 def content_hash(c: dict) -> str:
-    """内容指纹不包含可独立更新的产品标签。"""
+    """内容指纹不包含产品标签和可重算的事实标识；派生标识另行校验。"""
     return digest({k: v for k, v in c.items() if k not in
-                   ("dimension_id", "dimension_ids", "classification", "candidate_id", "source_skill_id", "source_skill_ids", "source_windows")})
+                   ("dimension_id", "dimension_ids", "classification", "candidate_id", "source_skill_id", "source_skill_ids", "source_windows", "content_key")})
 
 
 def source_pairs(candidates: list[dict]) -> list[tuple[dict, dict]]:

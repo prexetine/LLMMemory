@@ -18,6 +18,7 @@ from agent_generic_flow import GenericPipeline
 from agent_llm import TransientModelError
 from agent_retrieval import RetrievalError, Retriever
 from agent_data import SKILL_NAMES, exact_keys
+from agent_contracts import verify_source
 from agent_prompts import ROUTER
 from agent_session_control import PROMPT as CONTROL_PROMPT, controls, validate_controls
 
@@ -157,6 +158,8 @@ class FactDrivenPipeline(GenericPipeline):
             if retriever is None or retriever.db is not self.a.store.db:
                 retriever = Retriever(self.a.store.db, self.a.config["retrieval"], self.stats)
                 self.a.fact_retriever = retriever
+            # 检索器和向量缓存跨Session复用，统计归属必须绑定本次流水线。
+            retriever.stats = self.stats
             recalled = retriever.recall(active, state)
             from agent_retrieval import compatible, structured
             from agent_flow_data import source_pairs
@@ -328,6 +331,12 @@ class FactDrivenPipeline(GenericPipeline):
                 stage="dimension_mapping", candidate_ids=[], state="technical_retry",
                 reason="事实已提交，106维投影尚未收口", code="projection_incomplete",
                 session_id=self.s["session_id"])]
+        # 在事实提交前重放来源校验，防止审核后的内容变化绕过门禁。
+        proof_by_id = {proof["candidate_id"]: proof for proof in proofs}
+        for candidate in candidates:
+            if candidate["candidate_id"] not in proof_by_id:
+                raise ValueError("候选缺少来源审核凭证，禁止提交")
+            verify_source(proof_by_id[candidate["candidate_id"]], candidate, self.s)
         receipt = self.fact_store.commit_groups(self.s, candidates, proofs, decisions, signals, self.fact_tasks,
                                                relation_records, final_tasks=mapping_tasks)
         reviews = [dict(proof, source_decision=proof["decision"], candidate=next(c for c in candidates if c["candidate_id"] == proof["candidate_id"])) for proof in proofs]

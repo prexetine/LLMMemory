@@ -160,18 +160,18 @@ def run_dispatch(config_path: Path, config: dict, mode: str, output_override: st
     if "user_selection" not in config:
         code = run_one(config, mode, output_override, resume)
         if mode == "live" and config.get("export_html"):
-            if config.get("flow_version") == "fact-driven-v1":
-                from export_fact_memory_html import export_fact_html
-                view_store = MemoryStore(out / "memory.sqlite3")
-                try:
-                    export_fact_html(view_store.db, out / "index.html")
-                finally:
-                    view_store.close()
-                return code
-            from export_memory_html import export_user
             out = Path(output_override) if output_override else BASE / config["output_dir"]
             try:
-                export_user(out,out/"index.html",rules=BASE/config["rules_file"])
+                if config.get("flow_version") == "fact-driven-v1":
+                    from export_fact_memory_html import export_fact_html
+                    view_store = MemoryStore(out / "memory.sqlite3")
+                    try:
+                        export_fact_html(view_store.db, out / "index.html")
+                    finally:
+                        view_store.close()
+                else:
+                    from export_memory_html import export_user
+                    export_user(out,out/"index.html",rules=BASE/config["rules_file"])
             except Exception as exc:
                 report_path=out/"report.json"
                 report=json.loads(report_path.read_text(encoding="utf-8"))
