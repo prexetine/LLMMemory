@@ -303,7 +303,7 @@ class FactDrivenPipeline(GenericPipeline):
             control = storage_control(candidate, signals)
             if control["status"] != "allowed":
                 decisions[candidate["candidate_id"]] = {"action": "provisional", "reason": control["reason"],
-                                                        "storage_control": control["status"]}
+                                                        "storage_control": control}
             elif candidate.get("retention") == "discard":
                 decisions[candidate["candidate_id"]] = {"action": "provisional", "reason": "无新增记忆价值", "discard": True}
         relation_records = []

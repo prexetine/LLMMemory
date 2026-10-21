@@ -15,9 +15,12 @@ def summarize_results(results: list[dict], selected: int) -> dict:
         for p in result.get('reviews',[]):
             cid=p['candidate_id']; d=decisions.get(cid,{})
             source=p.get('source_decision',p.get('decision'))
+            control = d.get('storage_control', {})
+            # 旧事实流程报告使用字符串，新报告与通用流程使用控制对象。
+            control_status = control if isinstance(control, str) else control.get('status')
             if d.get('disposition') == 'discarded': outcome='discarded'
             elif source in ('reject','rejected'): outcome='rejected'
-            elif d.get('storage_control',{}).get('status') == 'blocked': outcome='storage_blocked'
+            elif control_status == 'blocked': outcome='storage_blocked'
             elif not committed: outcome='awaiting_commit'
             elif d.get('action') in ('new','reinforce','coexist','supersede','conflict'): outcome=d['action']
             else: outcome='semantic_pending'

@@ -151,12 +151,16 @@ class FactStore:
             candidate = data["candidate"]
             candidates.append(candidate)
             decision = data.get("decision", {"action":"provisional", "reason":"审核未完成", "technical_pending":True})
+            # 兼容旧事实收据中的字符串；恢复和导出统一使用带原因的控制对象。
+            if isinstance(decision.get("storage_control"), str):
+                decision = dict(decision, storage_control={"status": decision["storage_control"],
+                                                           "reason": decision.get("reason", "")})
             maintenance.append(dict(decision, candidate_id=row["candidate_id"]))
             if data.get("proof"):
                 reviews.append(dict(data["proof"], candidate=candidate))
             if row["source_decision"] == "reject":
                 summary["rejected_count"] += 1
-            elif decision.get("action") == "provisional" and not decision.get("technical_pending") and not decision.get("discard") and decision.get("storage_control") != "blocked":
+            elif decision.get("action") == "provisional" and not decision.get("technical_pending") and not decision.get("discard") and decision.get("storage_control", {}).get("status") != "blocked":
                 summary["semantic_pending_count"] += 1
             if row["fact_id"] and decision.get("action") != "provisional":
                 stored = self.db.execute("SELECT state FROM fact_assertions WHERE fact_id=?",
@@ -451,7 +455,9 @@ class FactStore:
     def save_analysis(self, observations: list[dict[str, Any]]) -> int:
         with self.db:
             for row in observations:
-                self.db.execute("INSERT OR REPLACE INTO analysis_observations VALUES(?,?,?,?,?,?)", (
+                self.db.execute("""INSERT OR REPLACE INTO analysis_observations
+                    (observation_id, device_id, observation_type, state, period_start, period_end, data)
+                    VALUES(?,?,?,?,?,?,?)""", (
                     row["observation_id"], row["device_id"], row["observation_type"], row["state"],
                     row.get("period_start"), row.get("period_end"), json.dumps(row, ensure_ascii=False)))
         return len(observations)
