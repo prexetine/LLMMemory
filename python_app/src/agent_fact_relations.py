@@ -9,10 +9,29 @@ from agent_flow_data import materialize_references
 from agent_fact_model import fact_text
 
 
+def _validation_feedback(error, evidence_pack):
+    """反馈只描述本任务的错误和可见用户区间，不修改引用或补造证据。"""
+    spans = []
+    for turn in evidence_pack:
+        text = turn.get("user_text", "")
+        if not text.strip():
+            continue
+        start, end = turn.get("source_spans", {}).get("user_text", [0, len(text)])
+        spans.append(dict(evidence_id=turn["evidence_id"], speaker="user", start=start, end=end))
+    return dict(code=getattr(error, "code", type(error).__name__), message=str(error),
+                evidence_id=getattr(error, "evidence_id", None), visible_user_spans=spans)
+
+
 def judge(pipeline, pairs, signals, prompt):
-    """只重发失败关系，合法关系立即缓存；两次预算跨外层恢复共享。"""
+    """只重发失败关系并携带逐项反馈；合法缓存身份与两次预算保持不变。"""
     result, pending = {}, {}
     keys, inputs = {}, {}
+    errors, feedback = {}, {}
+
+    def failed(pid, error):
+        errors[pid] = str(error)
+        feedback[pid] = _validation_feedback(error, inputs[pid]["evidence_pack"])
+
     for pid, (left, right) in pairs.items():
         ids = {e["evidence_id"] for item in (left, right) for e in item.get("evidence", [])}
         related = [s for s in signals if ids & {e["evidence_id"] for e in s["evidence"]}]
@@ -23,11 +42,16 @@ def judge(pipeline, pairs, signals, prompt):
                     evidence_pack=pack, signals=related)
         inputs[pid] = data
         def validate(row, pid=pid):
-            pipeline._validate_relation_envelope({"results": [row]}, [(pid, pairs[pid])])
-            basis = materialize_references(row["basis_refs"], dict(pipeline.s, turns=inputs[pid]["evidence_pack"]))
-            allowed = {e["evidence_id"] for s in inputs[pid]["signals"] if s["kind"] in ("correction", "change") for e in s["evidence"]}
-            if row["relation"] == "changed_with_direction" and (not basis or any(e["evidence_id"] not in allowed for e in basis)):
-                raise ValueError("更新缺少当前更正或变化证据")
+            try:
+                pipeline._validate_relation_envelope({"results": [row]}, [(pid, pairs[pid])])
+                basis = materialize_references(row["basis_refs"], dict(pipeline.s, turns=inputs[pid]["evidence_pack"]))
+                allowed = {e["evidence_id"] for s in inputs[pid]["signals"] if s["kind"] in ("correction", "change") for e in s["evidence"]}
+                if row["relation"] == "changed_with_direction" and (not basis or any(e["evidence_id"] not in allowed for e in basis)):
+                    raise ValueError("更新缺少当前更正或变化证据")
+            except (ValueError, TypeError, KeyError) as exc:
+                # 缓存校验失败也提供反馈，不改变成功条目的缓存键。
+                failed(pid, exc)
+                raise
         key, cached = pipeline.runtime.load_item("source_relations", prompt, data, validate)
         keys[pid] = (key, validate)
         if cached:
@@ -36,7 +60,6 @@ def judge(pipeline, pairs, signals, prompt):
             pending[pid] = None
     limit = pipeline.a.config.get("relation_batch_size", 16)
     budget = pipeline.runtime.attempts
-    errors = {}
 
     def process(ids):
         ids = [pid for pid in ids if pid not in result and budget["pair:" + keys[pid][0]] < 2]
@@ -44,7 +67,8 @@ def judge(pipeline, pairs, signals, prompt):
             return
         for pid in ids:
             budget["pair:" + keys[pid][0]] += 1
-        data = {"tasks": [inputs[pid] for pid in ids]}
+        data = {"tasks": [dict(inputs[pid], **({"validation_feedback": feedback[pid]} if pid in feedback else {}))
+                          for pid in ids]}
         def envelope(raw):
             if not isinstance(raw, dict) or set(raw) != {"results"} or not isinstance(raw["results"], list):
                 raise ValueError("关系封套非法")
@@ -61,10 +85,11 @@ def judge(pipeline, pairs, signals, prompt):
                 mid = len(ids) // 2
                 process(ids[:mid]); process(ids[mid:])
             else:
-                errors[ids[0]] = str(exc)
+                failed(ids[0], exc)
             return
         except (ValueError, TypeError, KeyError, TransientModelError) as exc:
-            errors.update({pid: str(exc) for pid in ids})
+            for pid in ids:
+                failed(pid, exc)
             return
         counts = Counter(r.get("pair_id") for r in raw["results"] if isinstance(r, dict))
         for pid in ids:
@@ -76,7 +101,7 @@ def judge(pipeline, pairs, signals, prompt):
                 pipeline.runtime.save_item(keys[pid][0], "source_relations", inputs[pid], row)
                 result[pid] = row
             except (ValueError, TypeError, KeyError) as exc:
-                errors[pid] = str(exc)
+                failed(pid, exc)
         if any(pid not in result for pid in ids):
             pipeline.runtime.discard_unit_cache(
                 pipeline.runtime.fingerprint("source_relations", prompt, dict(data, flow_version=pipeline.flow, policy=__import__("agent_contracts").VERSION)),
